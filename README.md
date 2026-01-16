@@ -1,10 +1,10 @@
 # Buzdealz Backend API
 
-Production-ready Express backend for the Buzdealz Wishlist feature with deal alerts.
+Production-ready Express backend for the Buzdealz deal tracking platform with wishlist management and deal alerts.
 
 ## Features
 
-- RESTful API endpoints for wishlist management
+- RESTful API endpoints for deals and wishlist management
 - Supabase authentication integration
 - PostgreSQL database with Drizzle ORM
 - Role-based access control (subscriber vs non-subscriber)
@@ -12,6 +12,7 @@ Production-ready Express backend for the Buzdealz Wishlist feature with deal ale
 - Analytics tracking for wishlist events
 - Zod schema validation
 - Comprehensive error handling
+- Health check endpoint
 - Edge case handling for expired/disabled deals
 
 ## Tech Stack
@@ -44,19 +45,25 @@ cp .env.example .env
 
 Edit `.env` with your credentials:
 ```env
-DATABASE_URL=postgresql://postgres.zneqrrrswthwvjcgpwix:[YOUR-PASSWORD]@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
-SUPABASE_URL=https://zneqrrrswthwvjcgpwix.supabase.co
+DATABASE_URL=postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-x-region.pooler.supabase.com:6543/postgres
+SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 JWT_SECRET=your-secret-key
 PORT=3001
 NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
 ```
 
 3. Generate and run database migrations:
 ```bash
 npm run db:generate
 npm run db:migrate
+```
+
+4. (Optional) Seed the database with sample deals:
+```bash
+npm run db:seed
 ```
 
 ## Development
@@ -82,9 +89,68 @@ npm start
 
 ## API Endpoints
 
+### Health Check
+
+Check if the API is running properly.
+
+```http
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "API is working fine! Let's gooooo 🚀",
+  "timestamp": "2024-01-15T10:00:00Z",
+  "environment": "development"
+}
+```
+
+---
+
+### Deals Management
+
+#### Get All Deals
+
+Fetch all available deals.
+
+```http
+GET /api/deals
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "uuid",
+    "title": "Product Name",
+    "description": "Product description",
+    "originalPrice": "99.99",
+    "currentPrice": "69.99",
+    "discountPercentage": 30,
+    "imageUrl": "https://...",
+    "merchantName": "Store Name",
+    "merchantUrl": "https://...",
+    "category": "Electronics",
+    "isActive": true,
+    "isExpired": false,
+    "expiresAt": "2024-02-01T00:00:00Z",
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": "2024-01-15T10:00:00Z"
+  }
+]
+```
+
+---
+
 ### Wishlist Management
 
 #### Get User Wishlist
+
+Fetch all items in the user's wishlist with deal details.
+
 ```http
 GET /api/wishlist
 Authorization: Bearer <token>
@@ -114,6 +180,7 @@ Authorization: Bearer <token>
         "isActive": true,
         "isExpired": false,
         "expiresAt": "2024-02-01T00:00:00Z",
+        "updatedAt": "2024-01-15T10:00:00Z",
         "bestAvailablePrice": "69.99",
         "status": "active"
       }
@@ -123,7 +190,17 @@ Authorization: Bearer <token>
 }
 ```
 
+**Status Values:**
+- `active` - Deal is currently active
+- `expired` - Deal has passed its expiration date
+- `disabled` - Deal is temporarily disabled
+
+---
+
 #### Add to Wishlist
+
+Add a deal to the user's wishlist with optional alert settings.
+
 ```http
 POST /api/wishlist
 Authorization: Bearer <token>
@@ -135,7 +212,11 @@ Content-Type: application/json
 }
 ```
 
-**Response:**
+**Request Body:**
+- `dealId` (string, required) - UUID of the deal to add
+- `alertEnabled` (boolean, required) - Enable price alerts (subscribers only)
+
+**Success Response (201):**
 ```json
 {
   "success": true,
@@ -150,7 +231,22 @@ Content-Type: application/json
 }
 ```
 
-**Error (Non-subscriber trying to enable alerts):**
+**Already Exists Response (200):**
+```json
+{
+  "success": true,
+  "message": "Deal already in wishlist",
+  "data": {
+    "id": "uuid",
+    "userId": "uuid",
+    "dealId": "uuid",
+    "alertEnabled": false,
+    "createdAt": "2024-01-15T10:00:00Z"
+  }
+}
+```
+
+**Error Response - Non-subscriber trying to enable alerts (403):**
 ```json
 {
   "error": "Alerts are only available for subscribers",
@@ -159,13 +255,28 @@ Content-Type: application/json
 }
 ```
 
+**Error Response - Deal not found (404):**
+```json
+{
+  "error": "Deal not found"
+}
+```
+
+---
+
 #### Remove from Wishlist
+
+Remove a deal from the user's wishlist.
+
 ```http
 DELETE /api/wishlist/:dealId
 Authorization: Bearer <token>
 ```
 
-**Response:**
+**URL Parameters:**
+- `dealId` (string, required) - UUID of the deal to remove
+
+**Success Response (200):**
 ```json
 {
   "success": true,
@@ -173,18 +284,14 @@ Authorization: Bearer <token>
 }
 ```
 
-### Health Check
-```http
-GET /health
-```
-
-**Response:**
+**Error Response - Item not found (404):**
 ```json
 {
-  "status": "ok",
-  "timestamp": "2024-01-15T10:00:00Z"
+  "error": "Wishlist item not found"
 }
 ```
+
+---
 
 ## Database Schema
 
@@ -304,7 +411,7 @@ HTTP Status Codes:
 
 ## Testing
 
-Manual testing steps:
+### Quick Test Commands
 
 1. Start the server:
 ```bash
@@ -316,28 +423,41 @@ npm run dev
 curl http://localhost:3001/health
 ```
 
-3. Test wishlist endpoints with authentication:
-```bash
-# Get token from Supabase Auth
-TOKEN="your_access_token"
+Expected response:
+```json
+{
+  "status": "ok",
+  "message": "API is working fine! Let's gooooo 🚀",
+  "timestamp": "2024-01-15T10:00:00.000Z",
+  "environment": "development"
+}
+```
 
+3. Test deals endpoint (requires authentication):
+```bash
+TOKEN="your_access_token_from_supabase"
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/deals
+```
+
+4. Test wishlist endpoints:
+```bash
 # Get wishlist
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/wishlist
 
 # Add to wishlist
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"dealId":"uuid","alertEnabled":false}' \
+  -d '{"dealId":"uuid-here","alertEnabled":false}' \
   http://localhost:3001/api/wishlist
 
 # Remove from wishlist
 curl -X DELETE -H "Authorization: Bearer $TOKEN" \
-  http://localhost:3001/api/wishlist/uuid
+  http://localhost:3001/api/wishlist/uuid-here
 ```
 
 ## Database Management
 
-View migrations:
+View database in Drizzle Studio:
 ```bash
 npm run db:studio
 ```
@@ -352,6 +472,11 @@ Apply migrations:
 npm run db:migrate
 ```
 
+Seed database with sample data:
+```bash
+npm run db:seed
+```
+
 ## Project Structure
 
 ```
@@ -361,11 +486,13 @@ backend/
 │   │   ├── schema.ts          # Drizzle schema definitions
 │   │   ├── index.ts           # Database client
 │   │   ├── migrate.ts         # Migration runner
+│   │   ├── seed.ts            # Sample data seeder
 │   │   └── migrations/        # SQL migrations
 │   ├── middleware/
 │   │   ├── auth.ts            # Authentication middleware
 │   │   └── validate.ts        # Zod validation middleware
 │   ├── routes/
+│   │   ├── deals.ts           # Deals endpoints
 │   │   └── wishlist.ts        # Wishlist endpoints
 │   ├── services/
 │   │   └── analytics.ts       # Analytics tracking service
@@ -382,15 +509,16 @@ backend/
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SUPABASE_URL` | Supabase project URL | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes |
-| `JWT_SECRET` | Secret for JWT signing | Yes |
-| `PORT` | Server port | No (default: 3001) |
-| `NODE_ENV` | Environment mode | No (default: development) |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
+| `SUPABASE_URL` | Supabase project URL | Yes | - |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes | - |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes | - |
+| `JWT_SECRET` | Secret for JWT signing | Yes | - |
+| `PORT` | Server port | No | 3001 |
+| `NODE_ENV` | Environment mode | No | development |
+| `FRONTEND_URL` | Frontend URL for CORS | No | http://localhost:5173 |
 
 ## Security
 
@@ -400,6 +528,7 @@ backend/
 - Input validation with Zod schemas
 - CORS configured for frontend origin
 - Environment variables for secrets
+- Service role key never exposed to client
 
 ## Performance
 
@@ -408,6 +537,18 @@ backend/
 - Efficient joins for wishlist queries
 - Async analytics tracking (non-blocking)
 - Query result caching in frontend via React Query
+
+## Available NPM Scripts
+
+```bash
+npm run dev          # Start development server with hot reload
+npm run build        # Build TypeScript to JavaScript
+npm start           # Start production server
+npm run db:generate # Generate database migrations
+npm run db:migrate  # Run database migrations
+npm run db:studio   # Open Drizzle Studio
+npm run db:seed     # Seed database with sample data
+```
 
 ## License
 
