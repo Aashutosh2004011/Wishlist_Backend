@@ -2,6 +2,28 @@
 
 Production-ready Express backend for the Buzdealz deal tracking platform with wishlist management and deal alerts.
 
+## 🚀 Live Deployment
+
+- **Backend API**: https://wishlist-backend-zn7m.onrender.com/health
+- **Frontend App**: https://wish-list-frontend-blue.vercel.app/
+- **Backend Repository**: https://github.com/Aashutosh2004011/Wishlist_Backend
+- **Frontend Repository**: https://github.com/Aashutosh2004011/WishList_frontend
+
+### 🎯 How to Access the Live App
+
+**IMPORTANT**: Follow these steps in order for the best experience:
+
+1. **Wake up the backend** (Render free tier sleeps after 15 min of inactivity):
+   - Visit: https://wishlist-backend-zn7m.onrender.com/health
+   - Wait for the response (first request may take ~30 seconds)
+   - You should see: `{"status":"ok","message":"API is working fine! Let's gooooo 🚀",...}`
+
+2. **Open the frontend app**:
+   - Visit: https://wish-list-frontend-blue.vercel.app/
+   - The app is now ready to use!
+
+This ensures the backend is awake and ready to handle requests from the frontend.
+
 ## Features
 
 - RESTful API endpoints for deals and wishlist management
